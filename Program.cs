@@ -354,10 +354,10 @@ internal static class Program
                 {
                     await Task.WhenAll(currentDownloads);
                 }
-                catch
+                catch (Exception ex)
                 {
                     exceptionOccurred = true;
-                    Console.WriteLine($"Download failed at grid record #{iterator}. Post will remain saved.");
+                    Console.WriteLine($"Download failed at grid record #{iterator}. Post will remain saved. {ex.GetType().Name}: {ex.Message}");
                 }
             }
 
