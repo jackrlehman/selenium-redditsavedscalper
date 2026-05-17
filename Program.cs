@@ -206,7 +206,7 @@ internal static class Program
         private async Task FindMediaAsync()
         {
             var done = false;
-            var reAttemptedAtIterator = -1;
+            var retryStartIterator = -1;
 
             while (!done)
             {
@@ -220,14 +220,14 @@ internal static class Program
                         iterator += 1;
                         currentDownloads = FindContentAndQueueDownloads();
                     }
-                    else if (reAttemptedAtIterator >= 0 && reAttemptedAtIterator + SavedTableRetryBuffer > iterator)
+                    else if (retryStartIterator >= 0 && retryStartIterator + SavedTableRetryBuffer > iterator)
                     {
                         Console.WriteLine("End of Saved table reached");
                         done = true;
                     }
                     else
                     {
-                        reAttemptedAtIterator = iterator;
+                        retryStartIterator = iterator;
                         Console.WriteLine($"End of table may have been reached at grid record #{iterator}.");
                         driver.Navigate().GoToUrl($"https://www.reddit.com/user/{username}/saved/");
                     }
