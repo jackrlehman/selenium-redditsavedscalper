@@ -534,7 +534,9 @@ internal static class ConsoleHelper
             if (key.Key == ConsoleKey.Enter)
             {
                 System.Console.WriteLine();
-                return password.ToString();
+                var passwordValue = password.ToString();
+                password.Clear();
+                return passwordValue;
             }
 
             if (key.Key == ConsoleKey.Backspace)
