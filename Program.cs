@@ -1,5 +1,4 @@
 using System.Net.Http;
-using System.Text;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 
@@ -28,16 +27,24 @@ internal static class Program
             {
                 var username = Prompt("Enter Reddit Username: ");
                 var password = PromptPassword("Enter Reddit Password: ");
-                var unsavePostAfterDownload = PromptForUnsavePreference();
 
-                Console.WriteLine("Process started. You will find a folder called 'Reddit Media' containing the downloaded contents in your base directory.");
+                try
+                {
+                    var unsavePostAfterDownload = PromptForUnsavePreference();
 
-                driver.Navigate().GoToUrl("https://www.reddit.com/");
-                var login = new Login(driver, username, password);
-                login.PerformLogin();
+                    Console.WriteLine("Process started. You will find a folder called 'Reddit Media' containing the downloaded contents in your base directory.");
 
-                var saved = new SavedScraper(driver, username, unsavePostAfterDownload);
-                await saved.BeginAsync();
+                    driver.Navigate().GoToUrl("https://www.reddit.com/");
+                    var login = new Login(driver, username, password);
+                    login.PerformLogin();
+
+                    var saved = new SavedScraper(driver, username, unsavePostAfterDownload);
+                    await saved.BeginAsync();
+                }
+                finally
+                {
+                    Array.Clear(password, 0, password.Length);
+                }
 
                 Console.WriteLine("All items downloaded");
             }
@@ -54,7 +61,7 @@ internal static class Program
 
     private static string Prompt(string message) => ConsoleHelper.ReadLineWithPrompt(message);
 
-    private static string PromptPassword(string message) => ConsoleHelper.ReadPasswordWithPrompt(message);
+    private static char[] PromptPassword(string message) => ConsoleHelper.ReadPasswordWithPrompt(message);
 
     private static bool PromptForUnsavePreference()
     {
@@ -89,9 +96,9 @@ internal static class Program
 
         private readonly IWebDriver driver;
         private readonly string username;
-        private readonly string password;
+        private readonly char[] password;
 
-        public Login(IWebDriver driver, string username, string password)
+        public Login(IWebDriver driver, string username, char[] password)
         {
             this.driver = driver;
             this.username = username;
@@ -112,7 +119,12 @@ internal static class Program
                 });
 
                 WaitHelper.WaitToBeClickableAndSendKeys(driver, By.Id(UsernameFieldId), username, ShortWaitSeconds);
-                WaitHelper.WaitToBeClickableAndSendKeys(driver, By.Id(PasswordFieldId), password, ShortWaitSeconds);
+                var passwordField = WaitHelper.WaitForClickable(driver, By.Id(PasswordFieldId), ShortWaitSeconds);
+                foreach (var character in password)
+                {
+                    passwordField.SendKeys(character.ToString());
+                }
+
                 WaitHelper.WaitToBeClickableAndClick(driver, By.XPath(LoginFormButtonXpath), ShortWaitSeconds);
                 WaitHelper.WaitUntil(driver, MediumWaitSeconds, currentDriver =>
                     currentDriver.FindElement(By.XPath(LoginConfirmationXpath)).Text.Contains(ExpectedLoginConfirmation, StringComparison.OrdinalIgnoreCase));
@@ -413,34 +425,32 @@ internal static class Program
 
     private static class WaitHelper
     {
-        public static void WaitToBeClickableAndClick(IWebDriver driver, By selector, int waitSeconds)
+        public static IWebElement WaitForClickable(IWebDriver driver, By selector, int waitSeconds)
         {
+            IWebElement? element = null;
             WaitUntil(driver, waitSeconds, currentDriver =>
             {
-                var element = currentDriver.FindElement(selector);
-                if (!element.Displayed || !element.Enabled)
+                var candidate = currentDriver.FindElement(selector);
+                if (!candidate.Displayed || !candidate.Enabled)
                 {
                     return false;
                 }
 
-                element.Click();
+                element = candidate;
                 return true;
             });
+
+            return element ?? throw new TimeoutException("The Selenium element was not clickable.");
+        }
+
+        public static void WaitToBeClickableAndClick(IWebDriver driver, By selector, int waitSeconds)
+        {
+            WaitForClickable(driver, selector, waitSeconds).Click();
         }
 
         public static void WaitToBeClickableAndSendKeys(IWebDriver driver, By selector, string keys, int waitSeconds)
         {
-            WaitUntil(driver, waitSeconds, currentDriver =>
-            {
-                var element = currentDriver.FindElement(selector);
-                if (!element.Displayed || !element.Enabled)
-                {
-                    return false;
-                }
-
-                element.SendKeys(keys);
-                return true;
-            });
+            WaitForClickable(driver, selector, waitSeconds).SendKeys(keys);
         }
 
         public static bool WaitToCheckPresenceAndClick(IWebDriver driver, By selector, int waitSeconds)
@@ -522,10 +532,10 @@ internal static class ConsoleHelper
         return System.Console.ReadLine() ?? string.Empty;
     }
 
-    public static string ReadPasswordWithPrompt(string message)
+    public static char[] ReadPasswordWithPrompt(string message)
     {
         System.Console.Write(message);
-        var password = new StringBuilder();
+        var password = new List<char>();
 
         while (true)
         {
@@ -534,19 +544,19 @@ internal static class ConsoleHelper
             if (key.Key == ConsoleKey.Enter)
             {
                 System.Console.WriteLine();
-                var passwordValue = password.ToString();
+                var passwordValue = password.ToArray();
                 password.Clear();
                 return passwordValue;
             }
 
             if (key.Key == ConsoleKey.Backspace)
             {
-                if (password.Length == 0)
+                if (password.Count == 0)
                 {
                     continue;
                 }
 
-                password.Length -= 1;
+                password.RemoveAt(password.Count - 1);
                 System.Console.Write("\b \b");
                 continue;
             }
@@ -556,7 +566,7 @@ internal static class ConsoleHelper
                 continue;
             }
 
-            password.Append(key.KeyChar);
+            password.Add(key.KeyChar);
             System.Console.Write('*');
         }
     }
