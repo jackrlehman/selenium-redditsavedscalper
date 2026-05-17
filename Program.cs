@@ -161,6 +161,7 @@ internal static class Program
         private const string UnsaveButtonAlt2Xpath = "/html/body/div[1]/div/div[2]/div[2]/div/div/div/div[2]/div[3]/div[1]/div[2]/div[1]/div[{0}]/div/div/div/div/div[2]/div/div[2]/div[3]/div[3]/div[2]/button";
         private const string UnsaveButtonAlt3Xpath = "/html/body/div[1]/div/div[2]/div[2]/div/div/div/div[2]/div[3]/div[1]/div[2]/div[1]/div[{0}]/div/div/div[2]/div/div[2]/div[3]/div[3]/div[2]/button";
         private const string PostContentCloseButtonXpath = "/html/body/div[1]/div/div[2]/div[3]/div/div/div/div[1]/div/div[2]/button";
+        private const int SavedTableRetryBuffer = 3;
 
         private static readonly string[] StandardContentAlternateXpaths =
         [
@@ -219,7 +220,7 @@ internal static class Program
                         iterator += 1;
                         currentDownloads = FindContentAndQueueDownloads();
                     }
-                    else if (reAttemptedAtIterator >= 0 && reAttemptedAtIterator + 3 > iterator)
+                    else if (reAttemptedAtIterator >= 0 && reAttemptedAtIterator + SavedTableRetryBuffer > iterator)
                     {
                         Console.WriteLine("End of Saved table reached");
                         done = true;
