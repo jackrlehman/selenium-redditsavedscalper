@@ -1,29 +1,32 @@
 # Reddit Saved Scalper
-Last updated: 2/18/2022. Executable behind code version, please build with your code editor for the latest.
 
 ## About
-Reddit Saved Scalper downloads all static media (excluding text) from your reddit saved tab. As Reddit's saved tab is limited to 1k posts, and deletes saved items past 1.2k, this utility allows for you to maintain your saved tab without worrying about saved media being forever lost.
+Reddit Saved Scalper downloads static media from your Reddit saved tab with Selenium. This version has been converted from Python to a C# console application on .NET 8.
 
 ## Usage
-Executable Included. Download: https://github.com/jackrlehman/Reddit-Saved-Scalper/releases
+1. Install the .NET 8 SDK and Google Chrome.
+2. Restore dependencies and run the app:
 
-
-## Development
-Requires Python 3+
-
-### Packages
-selenium 4.5.0, webdriver-manager 3.8.3, urllib3 1.26.12
 <pre>
-"pip3 install selenium" 
-"pip3 install webdriver-manager"
-"pip3 install urllib3"
+dotnet restore
+dotnet run
 </pre>
 
-### Exe Creation
-https://stackoverflow.com/questions/5458048/how-can-i-make-a-python-script-standalone-executable-to-run-without-any-dependen for usage.
+3. Enter your Reddit username and password when prompted.
+4. Choose whether posts should be unsaved after their media is downloaded.
+5. Downloaded files are written to a `Reddit Media` folder in the current working directory.
 
+## Development
+Requires .NET 8.
+
+### Package
 <pre>
-python -m PyInstaller [args] (ex: python -m PyInstaller script.py)
+dotnet add package Selenium.WebDriver --version 4.44.0
+</pre>
+
+### Build
+<pre>
+dotnet build
 </pre>
 
 Versioning format:
