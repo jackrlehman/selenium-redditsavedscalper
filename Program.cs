@@ -545,6 +545,11 @@ internal static class ConsoleHelper
             {
                 System.Console.WriteLine();
                 var passwordValue = password.ToArray();
+                for (var index = 0; index < password.Count; index += 1)
+                {
+                    password[index] = '\0';
+                }
+
                 password.Clear();
                 return passwordValue;
             }
