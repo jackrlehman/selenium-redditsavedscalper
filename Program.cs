@@ -513,8 +513,6 @@ internal static class Program
 
 internal static class ConsoleHelper
 {
-    public static void WriteLine(string message) => System.Console.WriteLine(message);
-
     public static string ReadLineWithPrompt(string message)
     {
         System.Console.Write(message);
