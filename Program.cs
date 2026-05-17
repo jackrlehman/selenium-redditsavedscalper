@@ -183,8 +183,6 @@ internal static class Program
         private readonly string username;
         private readonly bool unsaveAfterDownload;
         private static readonly HttpClient HttpClient = new();
-        private readonly List<Task> downloadTasks = [];
-        private readonly object downloadLock = new();
         private readonly string downloadPath = Path.Combine(Environment.CurrentDirectory, "Reddit Media");
         private int iterator;
         private int downloadCount;
@@ -201,27 +199,27 @@ internal static class Program
             Console.WriteLine($"Download folder location: {downloadPath}");
             Directory.CreateDirectory(downloadPath);
 
-            FindMedia();
-            await Task.WhenAll(downloadTasks);
+            await FindMediaAsync();
         }
 
-        private void FindMedia()
+        private async Task FindMediaAsync()
         {
             var done = false;
-            var reAttemptedAtIterator = 0;
+            var reAttemptedAtIterator = -1;
 
             while (!done)
             {
                 var exceptionOccurred = false;
+                IReadOnlyList<Task> currentDownloads = [];
 
                 try
                 {
                     if (WaitHelper.WaitToCheckPresenceAndClick(driver, By.XPath(string.Format(TableItemXpath, iterator + 1)), LongWaitSeconds))
                     {
                         iterator += 1;
-                        FindContentAndQueueDownloads();
+                        currentDownloads = FindContentAndQueueDownloads();
                     }
-                    else if (reAttemptedAtIterator + 3 > iterator && reAttemptedAtIterator != 0)
+                    else if (reAttemptedAtIterator >= 0 && reAttemptedAtIterator + 3 > iterator)
                     {
                         Console.WriteLine("End of Saved table reached");
                         done = true;
@@ -240,17 +238,18 @@ internal static class Program
                 }
                 finally
                 {
-                    ExitFoundMedia(exceptionOccurred);
+                    await ExitFoundMediaAsync(exceptionOccurred, currentDownloads);
                 }
             }
         }
 
-        private void FindContentAndQueueDownloads()
+        private IReadOnlyList<Task> FindContentAndQueueDownloads()
         {
             var contentFound = false;
             var possibleContentArray = false;
             var standardIndex = 0;
             var arrayIndex = 0;
+            var currentDownloads = new List<Task>();
 
             while (!contentFound)
             {
@@ -259,7 +258,7 @@ internal static class Program
                     if (possibleContentArray)
                     {
                         var source = GetArrayContentSource(arrayIndex);
-                        QueueDownload(source);
+                        QueueDownload(source, currentDownloads);
                         arrayIndex += 1;
                     }
                     else
@@ -276,7 +275,7 @@ internal static class Program
                             continue;
                         }
 
-                        QueueDownload(source);
+                        QueueDownload(source, currentDownloads);
                         contentFound = true;
                     }
                 }
@@ -300,6 +299,8 @@ internal static class Program
                     }
                 }
             }
+
+            return currentDownloads;
         }
 
         private string GetStandardContentSource(int offset)
@@ -331,7 +332,7 @@ internal static class Program
             throw new NoSuchElementException();
         }
 
-        private void QueueDownload(string source)
+        private void QueueDownload(string source, ICollection<Task> currentDownloads)
         {
             if (source.Contains(".gif", StringComparison.OrdinalIgnoreCase))
             {
@@ -340,15 +341,25 @@ internal static class Program
             }
 
             var currentDownload = Interlocked.Increment(ref downloadCount);
-            lock (downloadLock)
-            {
-                downloadTasks.Add(DownloadMediaAsync(source, currentDownload));
-            }
+            currentDownloads.Add(DownloadMediaAsync(source, currentDownload));
         }
 
-        private void ExitFoundMedia(bool exceptionOccurred)
+        private async Task ExitFoundMediaAsync(bool exceptionOccurred, IReadOnlyCollection<Task> currentDownloads)
         {
             WaitHelper.WaitToCheckPresenceAndClick(driver, By.XPath(PostContentCloseButtonXpath), LongWaitSeconds);
+
+            if (currentDownloads.Count > 0)
+            {
+                try
+                {
+                    await Task.WhenAll(currentDownloads);
+                }
+                catch
+                {
+                    exceptionOccurred = true;
+                    Console.WriteLine($"Download failed at grid record #{iterator}. Post will remain saved.");
+                }
+            }
 
             if (!unsaveAfterDownload)
             {
