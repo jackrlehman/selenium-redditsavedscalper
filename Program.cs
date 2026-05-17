@@ -42,7 +42,7 @@ internal static class Program
             }
             catch
             {
-                Console.WriteLine("An unresolvable issue occured. Application shutting down.");
+                Console.WriteLine("An unresolvable issue occurred. Application shutting down.");
             }
         }
         catch
@@ -51,7 +51,7 @@ internal static class Program
         }
     }
 
-    private static string Prompt(string message) => Console.ReadLineWithPrompt(message);
+    private static string Prompt(string message) => ConsoleHelper.ReadLineWithPrompt(message);
 
     private static bool PromptForUnsavePreference()
     {
@@ -170,7 +170,7 @@ internal static class Program
         private readonly IWebDriver driver;
         private readonly string username;
         private readonly bool unsaveAfterDownload;
-        private readonly HttpClient httpClient = new();
+        private static readonly HttpClient HttpClient = new();
         private readonly List<Task> downloadTasks = [];
         private readonly object downloadLock = new();
         private readonly string downloadPath = Path.Combine(Environment.CurrentDirectory, "Reddit Media");
@@ -390,7 +390,7 @@ internal static class Program
             var fileName = $"{DateTime.Now:MM-dd-yyyy HH-mm-ss-fff} {count}.{extension}";
             var filePath = Path.Combine(downloadPath, fileName);
 
-            await using var sourceStream = await httpClient.GetStreamAsync(source);
+            await using var sourceStream = await HttpClient.GetStreamAsync(source);
             await using var destinationStream = File.Create(filePath);
             await sourceStream.CopyToAsync(destinationStream);
 
@@ -511,7 +511,7 @@ internal static class Program
     }
 }
 
-internal static class Console
+internal static class ConsoleHelper
 {
     public static void WriteLine(string message) => System.Console.WriteLine(message);
 
