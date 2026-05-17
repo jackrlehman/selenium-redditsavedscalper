@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Text;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 
@@ -26,7 +27,7 @@ internal static class Program
             try
             {
                 var username = Prompt("Enter Reddit Username: ");
-                var password = Prompt("Enter Reddit Password: ");
+                var password = PromptPassword("Enter Reddit Password: ");
                 var unsavePostAfterDownload = PromptForUnsavePreference();
 
                 Console.WriteLine("Process started. You will find a folder called 'Reddit Media' containing the downloaded contents in your base directory.");
@@ -52,6 +53,8 @@ internal static class Program
     }
 
     private static string Prompt(string message) => ConsoleHelper.ReadLineWithPrompt(message);
+
+    private static string PromptPassword(string message) => ConsoleHelper.ReadPasswordWithPrompt(message);
 
     private static bool PromptForUnsavePreference()
     {
@@ -517,5 +520,42 @@ internal static class ConsoleHelper
     {
         System.Console.Write(message);
         return System.Console.ReadLine() ?? string.Empty;
+    }
+
+    public static string ReadPasswordWithPrompt(string message)
+    {
+        System.Console.Write(message);
+        var password = new StringBuilder();
+
+        while (true)
+        {
+            var key = System.Console.ReadKey(intercept: true);
+
+            if (key.Key == ConsoleKey.Enter)
+            {
+                System.Console.WriteLine();
+                return password.ToString();
+            }
+
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (password.Length == 0)
+                {
+                    continue;
+                }
+
+                password.Length -= 1;
+                System.Console.Write("\b \b");
+                continue;
+            }
+
+            if (char.IsControl(key.KeyChar))
+            {
+                continue;
+            }
+
+            password.Append(key.KeyChar);
+            System.Console.Write('*');
+        }
     }
 }
