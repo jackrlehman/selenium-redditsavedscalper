@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net.Http;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
@@ -119,11 +120,7 @@ internal static class Program
                 });
 
                 WaitHelper.WaitToBeClickableAndSendKeys(driver, By.Id(UsernameFieldId), username, ShortWaitSeconds);
-                var passwordField = WaitHelper.WaitForClickable(driver, By.Id(PasswordFieldId), ShortWaitSeconds);
-                foreach (var character in password)
-                {
-                    passwordField.SendKeys(character.ToString());
-                }
+                WaitHelper.WaitToBeClickableAndSendKeys(driver, By.Id(PasswordFieldId), new string(password), ShortWaitSeconds);
 
                 WaitHelper.WaitToBeClickableAndClick(driver, By.XPath(LoginFormButtonXpath), ShortWaitSeconds);
                 WaitHelper.WaitUntil(driver, MediumWaitSeconds, currentDriver =>
@@ -535,44 +532,57 @@ internal static class ConsoleHelper
     public static char[] ReadPasswordWithPrompt(string message)
     {
         System.Console.Write(message);
-        var password = new List<char>();
+        var buffer = ArrayPool<char>.Shared.Rent(32);
+        var count = 0;
 
-        while (true)
+        try
         {
-            var key = System.Console.ReadKey(intercept: true);
-
-            if (key.Key == ConsoleKey.Enter)
+            while (true)
             {
-                System.Console.WriteLine();
-                var passwordValue = password.ToArray();
-                for (var index = 0; index < password.Count; index += 1)
+                var key = System.Console.ReadKey(intercept: true);
+
+                if (key.Key == ConsoleKey.Enter)
                 {
-                    password[index] = '\0';
+                    System.Console.WriteLine();
+                    return buffer[..count].ToArray();
                 }
 
-                password.Clear();
-                return passwordValue;
-            }
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (count == 0)
+                    {
+                        continue;
+                    }
 
-            if (key.Key == ConsoleKey.Backspace)
-            {
-                if (password.Count == 0)
+                    count -= 1;
+                    buffer[count] = '\0';
+                    System.Console.Write("\b \b");
+                    continue;
+                }
+
+                if (char.IsControl(key.KeyChar))
                 {
                     continue;
                 }
 
-                password.RemoveAt(password.Count - 1);
-                System.Console.Write("\b \b");
-                continue;
-            }
+                if (count == buffer.Length)
+                {
+                    var expandedBuffer = ArrayPool<char>.Shared.Rent(buffer.Length * 2);
+                    Array.Copy(buffer, expandedBuffer, buffer.Length);
+                    Array.Clear(buffer, 0, buffer.Length);
+                    ArrayPool<char>.Shared.Return(buffer);
+                    buffer = expandedBuffer;
+                }
 
-            if (char.IsControl(key.KeyChar))
-            {
-                continue;
+                buffer[count] = key.KeyChar;
+                count += 1;
+                System.Console.Write('*');
             }
-
-            password.Add(key.KeyChar);
-            System.Console.Write('*');
+        }
+        finally
+        {
+            Array.Clear(buffer, 0, buffer.Length);
+            ArrayPool<char>.Shared.Return(buffer);
         }
     }
 }
