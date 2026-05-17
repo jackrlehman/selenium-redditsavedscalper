@@ -92,7 +92,7 @@ internal sealed class SavedScraper
                     if (source.Contains("flair", StringComparison.OrdinalIgnoreCase))
                     {
                         standardIndex += 1;
-                        if (standardIndex > 20)
+                        if (standardIndex > RedditAppSettings.MaxStandardContentRetries)
                         {
                             throw new Exception("Element could not be located due to a most likely broken page");
                         }
@@ -113,7 +113,7 @@ internal sealed class SavedScraper
                 else if (!possibleContentArray)
                 {
                     standardIndex += 1;
-                    if (standardIndex > 10)
+                    if (standardIndex > RedditAppSettings.StandardToArrayThreshold)
                     {
                         possibleContentArray = true;
                     }
@@ -198,10 +198,7 @@ internal sealed class SavedScraper
 
         if (iterator != 1)
         {
-            WaitHelper.CheckExistsAndClick(driver, By.XPath(RedditLocators.Saved.PostContentCloseButtonXpath));
-            WaitHelper.CheckExistsAndClick(driver, By.XPath(RedditLocators.Saved.PostContentCloseButtonXpath));
-            WaitHelper.CheckExistsAndClick(driver, By.XPath(RedditLocators.Saved.PostContentCloseButtonXpath));
-            WaitHelper.CheckExistsAndClick(driver, By.XPath(RedditLocators.Saved.PostContentCloseButtonXpath));
+            CloseNestedPostContent();
         }
 
         if (exceptionOccurred)
@@ -250,6 +247,14 @@ internal sealed class SavedScraper
         if (count % 10 == 0)
         {
             Console.WriteLine($"Total items downloaded: {count}");
+        }
+    }
+
+    private void CloseNestedPostContent()
+    {
+        for (var attempt = 0; attempt < RedditAppSettings.NestedCloseButtonAttempts; attempt += 1)
+        {
+            WaitHelper.CheckExistsAndClick(driver, By.XPath(RedditLocators.Saved.PostContentCloseButtonXpath));
         }
     }
 

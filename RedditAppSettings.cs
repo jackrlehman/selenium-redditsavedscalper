@@ -6,5 +6,8 @@ internal static class RedditAppSettings
     public const int SavedTableRetryBuffer = 3;
     public const int PostContentStandardValue = 5;
     public const int PostContentArrayStandardValue = 1;
+    public const int MaxStandardContentRetries = 20;
+    public const int StandardToArrayThreshold = 10;
+    public const int NestedCloseButtonAttempts = 4;
     public const string DownloadFolderName = "Reddit Media";
 }
