@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="RedditSavedScalper.Maui.MainPage"
+             Title="Reddit Saved Scalper"
+             BackgroundColor="{StaticResource Bg}">
+
+    <ScrollView>
+        <VerticalStackLayout x:Name="Root" Padding="26,28" Spacing="18"
+                             MaximumWidthRequest="600" HorizontalOptions="Center">
+
+            <!-- Header -->
+            <VerticalStackLayout x:Name="HeaderSection" Spacing="6">
+                <Label Text="Reddit Saved Scalper" Style="{StaticResource Title}" />
+                <Label Text="Your saved posts, downloaded to your machine." Style="{StaticResource Subtitle}" />
+            </VerticalStackLayout>
+
+            <!-- Options -->
+            <Border x:Name="OptionsCard" Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="18">
+
+                    <HorizontalStackLayout Spacing="14" VerticalOptions="Center">
+                        <Button x:Name="LoginButton" Text="Log in to Reddit"
+                                Style="{StaticResource Secondary}" Clicked="OnLoginClicked" />
+                        <Border x:Name="LoginStatusPill" Style="{StaticResource Pill}" VerticalOptions="Center">
+                            <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                                <Ellipse x:Name="LoginStatusDot" WidthRequest="9" HeightRequest="9"
+                                         Fill="{StaticResource Muted}" VerticalOptions="Center" />
+                                <Label x:Name="LoginStatusLabel" Text="Not logged in" FontSize="12"
+                                       TextColor="{StaticResource Text}" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </Border>
+                    </HorizontalStackLayout>
+
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto"
+                          RowSpacing="16" ColumnSpacing="14">
+
+                        <Switch x:Name="UnsaveSwitch" Grid.Row="0" Grid.Column="0"
+                                Toggled="OnUnsaveToggled" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Row="0" Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                            <Label Text="Unsave after download" FontSize="14" />
+                            <Label Text="Remove each post from Saved once it's downloaded" Style="{StaticResource Caption}" FontSize="11" />
+                        </VerticalStackLayout>
+
+                        <Switch x:Name="HeadlessSwitch" Grid.Row="1" Grid.Column="0"
+                                Toggled="OnHeadlessToggled" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                            <Label Text="Run hidden" FontSize="14" />
+                            <Label Text="No Chrome window while scraping (login still shows)" Style="{StaticResource Caption}" FontSize="11" />
+                        </VerticalStackLayout>
+
+                        <Switch x:Name="OpenWhenDoneSwitch" Grid.Row="2" Grid.Column="0"
+                                Toggled="OnOpenWhenDoneToggled" VerticalOptions="Center" />
+                        <VerticalStackLayout Grid.Row="2" Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                            <Label Text="Open folder when finished" FontSize="14" />
+                            <Label Text="Reveal the downloads in Explorer at the end" Style="{StaticResource Caption}" FontSize="11" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <VerticalStackLayout Spacing="7">
+                        <Label Text="DOWNLOAD FOLDER" Style="{StaticResource FieldLabel}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Border Grid.Column="0" Style="{StaticResource Field}" VerticalOptions="Center">
+                                <Entry x:Name="FolderEntry" Style="{StaticResource FieldEntry}" TextChanged="OnFolderChanged" />
+                            </Border>
+                            <Button Grid.Column="1" Text="Browse" Style="{StaticResource Secondary}" Clicked="OnBrowseClicked" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Actions -->
+            <Grid x:Name="ActionsSection" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto"
+                  ColumnSpacing="12" RowSpacing="8">
+                <Button x:Name="StartButton" Grid.Row="0" Grid.Column="0" Text="Start"
+                        Style="{StaticResource Primary}" Clicked="OnStartClicked" />
+                <Button x:Name="StopButton" Grid.Row="0" Grid.Column="1" Text="Stop"
+                        Style="{StaticResource Secondary}" IsEnabled="False" Clicked="OnStopClicked" />
+                <Label x:Name="CountLabel" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                       Text="" Style="{StaticResource Caption}" FontSize="12" />
+            </Grid>
+
+            <!-- Log -->
+            <VerticalStackLayout x:Name="LogSection" Spacing="7">
+                <Label Text="OUTPUT" Style="{StaticResource FieldLabel}" />
+                <Border Style="{StaticResource LogPanel}">
+                    <Editor x:Name="LogEditor" Style="{StaticResource LogEditor}"
+                            IsReadOnly="True" HeightRequest="210" />
+                </Border>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
