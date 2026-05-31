@@ -17,25 +17,31 @@ internal sealed class Login
     {
         try
         {
-            WaitHelper.WaitToBeClickableAndClick(driver, By.XPath(RedditLocators.Login.PopupButtonXpath), RedditAppSettings.ShortWaitSeconds);
-            WaitHelper.WaitUntil(driver, RedditAppSettings.ShortWaitSeconds, currentDriver =>
+            // Reuse a persistent-profile session if one exists - avoids re-login and 2FA.
+            if (HasExistingSession())
             {
-                currentDriver.SwitchTo().DefaultContent();
-                var frame = currentDriver.FindElement(By.XPath(RedditLocators.Login.FormIframeXpath));
-                currentDriver.SwitchTo().Frame(frame);
-                return true;
-            });
+                Console.WriteLine("Existing Reddit session detected; skipping login.");
+                return;
+            }
 
-            WaitHelper.WaitToBeClickableAndSendKeys(driver, By.Id(RedditLocators.Login.UsernameFieldId), username, RedditAppSettings.ShortWaitSeconds);
-            WaitHelper.WaitToBeClickableAndSendKeys(driver, By.Id(RedditLocators.Login.PasswordFieldId), new string(password), RedditAppSettings.ShortWaitSeconds);
+            driver.Navigate().GoToUrl(RedditUrls.Login);
 
-            WaitHelper.WaitToBeClickableAndClick(driver, By.XPath(RedditLocators.Login.FormButtonXpath), RedditAppSettings.ShortWaitSeconds);
-            WaitHelper.WaitUntil(driver, RedditAppSettings.MediumWaitSeconds, currentDriver =>
-                currentDriver.FindElement(By.XPath(RedditLocators.Login.ConfirmationXpath)).Text.Contains(RedditLocators.Login.ExpectedConfirmationText, StringComparison.OrdinalIgnoreCase));
+            TypeIntoShadowInput(RedditLocators.Login.UsernameHostId, username);
+            TypeIntoShadowInput(RedditLocators.Login.PasswordHostId, new string(password));
 
-            driver.SwitchTo().DefaultContent();
-            WaitHelper.WaitToCheckPresenceAndClick(driver, By.XPath(RedditLocators.Login.InterestsPopupCloseButtonXpath), RedditAppSettings.MediumWaitSeconds);
-            driver.Navigate().GoToUrl(RedditUrls.SavedPage(username));
+            // Blur the password field so Reddit's change-based validation enables
+            // the submit button (verified: button is disabled until this fires).
+            driver.FindElement(By.Id(RedditLocators.Login.PasswordHostId))
+                .GetShadowRoot()
+                .FindElement(By.CssSelector(RedditLocators.Login.ShadowInputCss))
+                .SendKeys(Keys.Tab);
+
+            WaitHelper.WaitToBeClickableAndClick(driver, By.CssSelector(RedditLocators.Login.SubmitButtonCss), RedditAppSettings.MediumWaitSeconds);
+
+            // Login has completed once Reddit redirects away from the login page.
+            WaitHelper.WaitUntil(driver, RedditAppSettings.LongWaitSeconds, currentDriver =>
+                !currentDriver.Url.Contains("/login", StringComparison.OrdinalIgnoreCase));
+
             Console.WriteLine("Login Successful");
         }
         catch
@@ -43,5 +49,49 @@ internal sealed class Login
             Console.WriteLine("Login Failed");
             throw new Exception("Login Failed");
         }
+    }
+
+    // True when the browser already holds a logged-in Reddit session (e.g. from a
+    // persistent --profile directory), letting us skip the login form entirely.
+    private bool HasExistingSession()
+    {
+        driver.Navigate().GoToUrl(RedditUrls.Home);
+        try
+        {
+            WaitHelper.WaitUntil(driver, RedditAppSettings.ShortWaitSeconds, currentDriver =>
+                currentDriver.FindElement(By.CssSelector(RedditLocators.Login.LoggedInHeaderCss)) != null);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    // The login inputs are <faceplate-text-input> web components; the real <input>
+    // is inside an open shadow root, so we descend into it before sending keys.
+    private void TypeIntoShadowInput(string hostId, string text)
+    {
+        WaitHelper.WaitUntil(driver, RedditAppSettings.ShortWaitSeconds, currentDriver =>
+        {
+            try
+            {
+                var input = currentDriver.FindElement(By.Id(hostId))
+                    .GetShadowRoot()
+                    .FindElement(By.CssSelector(RedditLocators.Login.ShadowInputCss));
+
+                if (!input.Displayed || !input.Enabled)
+                {
+                    return false;
+                }
+
+                input.SendKeys(text);
+                return true;
+            }
+            catch (WebDriverException)
+            {
+                return false;
+            }
+        });
     }
 }

@@ -1,3 +1,12 @@
 bin/
 obj/
 __pycache__/
+
+# Captured live Reddit DOM (may contain personal saved-page content)
+dom-samples/captured/
+
+# Persistent Chrome profile (contains your logged-in session cookies)
+.selenium-profile/
+
+# Downloaded media output
+Reddit Media/
