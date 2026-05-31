@@ -1,27 +1,48 @@
 using OpenQA.Selenium;
 
-internal sealed class SavedScraper
+namespace RedditSavedScalper.Core;
+
+public sealed class SavedScraper
 {
     private static readonly HttpClient HttpClient = new();
 
     private readonly IWebDriver driver;
-    private readonly string username;
-    private readonly bool unsaveAfterDownload;
-    private readonly string downloadPath = Path.Combine(Environment.CurrentDirectory, RedditAppSettings.DownloadFolderName);
+    private readonly ScraperOptions options;
+    private readonly IProgress<ScrapeProgress>? progress;
+    private readonly CancellationToken cancellationToken;
+    private readonly string downloadPath;
     private int downloadCount;
     private int postCount;
+    private int skipCount;
 
-    public SavedScraper(IWebDriver driver, string username, bool unsaveAfterDownload)
+    public SavedScraper(
+        IWebDriver driver,
+        ScraperOptions options,
+        IProgress<ScrapeProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         this.driver = driver;
-        this.username = username;
-        this.unsaveAfterDownload = unsaveAfterDownload;
+        this.options = options;
+        this.progress = progress;
+        this.cancellationToken = cancellationToken;
+        downloadPath = options.ResolveDownloadFolder();
     }
 
-    public async Task BeginAsync()
+    public async Task<ScrapeResult> RunAsync()
     {
-        Console.WriteLine($"Download folder location: {downloadPath}");
-        Directory.CreateDirectory(downloadPath);
+        Report($"Download folder: {downloadPath}");
+
+        // Create the folder (and any missing parents) up front. If the path is
+        // unusable (bad drive, illegal characters, no permission) fail clearly here
+        // rather than mid-download with a cryptic per-file error.
+        try
+        {
+            Directory.CreateDirectory(downloadPath);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Could not use the download folder '{downloadPath}': {ex.Message}", ex);
+        }
 
         // When unsaving, each post must be handled while it is still on screen, since
         // the feed virtualizes off-screen posts out of the DOM. So download is awaited
@@ -31,7 +52,9 @@ internal sealed class SavedScraper
 
         await ForEachSavedPostAsync(async (postElement, item) =>
         {
-            if (unsaveAfterDownload)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (options.UnsaveAfterDownload)
             {
                 if (await DownloadItemAsync(item))
                 {
@@ -46,11 +69,12 @@ internal sealed class SavedScraper
 
         await Task.WhenAll(deferredDownloads);
 
-        Console.WriteLine($"Done. Downloaded {downloadCount} files from {postCount} saved posts.");
+        Report($"Done. Downloaded {downloadCount} files from {postCount} saved posts.");
+        return new ScrapeResult(postCount, downloadCount, skipCount);
     }
 
     // Read-only collection of every saved post (used by the diagnostic dry run).
-    internal IReadOnlyList<SavedItem> CollectSavedItems()
+    public IReadOnlyList<SavedItem> CollectSavedItems()
     {
         var items = new List<SavedItem>();
         ForEachSavedPostAsync((_, item) =>
@@ -66,7 +90,7 @@ internal sealed class SavedScraper
     // re-rendering never double-counts. Stops once several scrolls reveal nothing new.
     private async Task ForEachSavedPostAsync(Func<IWebElement, SavedItem, Task> handler)
     {
-        driver.Navigate().GoToUrl(RedditUrls.SavedPage(username));
+        driver.Navigate().GoToUrl(RedditUrls.SavedPage(options.Username));
         driver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromSeconds(RedditAppSettings.LongWaitSeconds);
 
         try
@@ -76,7 +100,7 @@ internal sealed class SavedScraper
         }
         catch (TimeoutException)
         {
-            Console.WriteLine("No saved posts found (or the feed did not load).");
+            Report("No saved posts found (or the feed did not load).");
             return;
         }
 
@@ -85,6 +109,7 @@ internal sealed class SavedScraper
 
         while (stableScrolls < RedditAppSettings.SavedFeedStableScrolls)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var countBefore = processed.Count;
 
             foreach (var postElement in driver.FindElements(By.CssSelector(RedditLocators.Saved.PostCss)))
@@ -205,7 +230,8 @@ internal sealed class SavedScraper
     {
         if (item.MediaUrls.Count == 0)
         {
-            Console.WriteLine($"Skipping {item.PostId}: no downloadable media (post-type '{item.PostType}').");
+            skipCount += 1;
+            Report($"Skipping {item.PostId}: no downloadable media (post-type '{item.PostType}').");
             return false;
         }
 
@@ -220,7 +246,9 @@ internal sealed class SavedScraper
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Download failed for {item.PostId}. Post will remain saved. {ex.GetType().Name}: {ex.Message}");
+            // Only mention staying saved when unsaving was actually on the table.
+            var savedNote = options.UnsaveAfterDownload ? " It will stay saved." : string.Empty;
+            Report($"Download failed for {item.PostId}.{savedNote} {ex.GetType().Name}: {ex.Message}");
             return false;
         }
     }
@@ -231,76 +259,99 @@ internal sealed class SavedScraper
         var fileName = $"{DateTime.Now:MM-dd-yyyy HH-mm-ss-fff} {count}.{extension}";
         var filePath = Path.Combine(downloadPath, fileName);
 
-        await using var sourceStream = await HttpClient.GetStreamAsync(source);
+        await using var sourceStream = await HttpClient.GetStreamAsync(source, cancellationToken);
         await using var destinationStream = File.Create(filePath);
-        await sourceStream.CopyToAsync(destinationStream);
+        await sourceStream.CopyToAsync(destinationStream, cancellationToken);
 
         if (count % 10 == 0)
         {
-            Console.WriteLine($"Total items downloaded: {count}");
+            Report($"Total items downloaded: {count}");
         }
     }
 
     // Unsave by opening this post's overflow menu and clicking the save toggle.
-    // Called while the post is still on screen (see BeginAsync). Selectors come from
-    // the captured live menu; the click itself is intentionally never run during
-    // development because it modifies the account.
+    // Called while the post is still on screen (see RunAsync). Selectors come from
+    // the captured live menu; the click itself was never run during development
+    // because it modifies the account.
     private void Unsave(SavedItem item)
     {
         var menuSelector = By.CssSelector($"{RedditLocators.Saved.OverflowMenuCss}[post-id='{item.PostId}']");
         if (!WaitHelper.CheckExists(driver, menuSelector))
         {
-            Console.WriteLine($"Overflow menu for {item.PostId} not present; leaving it saved.");
+            Report($"Overflow menu for {item.PostId} not present; leaving it saved.");
             return;
         }
 
-        var menu = driver.FindElement(menuSelector);
-        ((IJavaScriptExecutor)driver).ExecuteScript("arguments[0].scrollIntoView({block:'center'});", menu);
-        Thread.Sleep(300);
+        // Bring it into view so the menu popover lays out correctly, then do the whole
+        // open-and-click in the browser (see UnsaveScript).
+        ((IJavaScriptExecutor)driver).ExecuteScript(
+            "arguments[0].scrollIntoView({block:'center'});",
+            driver.FindElement(menuSelector));
+        Thread.Sleep(200);
 
+        string outcome;
         try
         {
-            menu.FindElement(By.CssSelector(RedditLocators.Saved.OverflowTriggerCss)).Click();
+            outcome = ((IJavaScriptExecutor)driver).ExecuteAsyncScript(UnsaveScript, item.PostId) as string ?? "error";
         }
-        catch (WebDriverException)
+        catch (WebDriverException ex)
         {
-            Console.WriteLine($"Could not open overflow menu for {item.PostId}; leaving it saved.");
-            return;
+            outcome = ex.GetType().Name;
         }
 
-        if (!ClickFirstVisible(By.CssSelector(RedditLocators.Saved.UnsaveItemCss)))
+        if (outcome != "ok" && outcome != "already-unsaved")
         {
-            Console.WriteLine($"Could not find the unsave item for {item.PostId}; leaving it saved.");
+            Report($"Could not unsave {item.PostId} ({outcome}); leaving it saved.");
         }
     }
 
-    // The overflow menu is portaled and pre-rendered (hidden) per post, so several
-    // elements match the selector; click the one that is actually visible.
-    private bool ClickFirstVisible(By selector)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(RedditAppSettings.ShortWaitSeconds);
-        while (DateTime.UtcNow < deadline)
-        {
-            foreach (var element in driver.FindElements(selector))
-            {
-                try
-                {
-                    if (element.Displayed)
-                    {
-                        element.Click();
-                        return true;
-                    }
-                }
-                catch (WebDriverException)
-                {
-                }
+    // Opens the post's overflow menu and clicks the (visible) "Remove from saved"
+    // toggle, entirely in the browser. The menu items are portaled and can live in
+    // shadow DOM, so we walk shadow roots and poll for the menu to render, then click
+    // via JS (which avoids Selenium's strict popover visibility/obscured checks). The
+    // is-post-saved guard means an already-unsaved post is never re-saved by mistake.
+    private const string UnsaveScript = @"
+        const postId = arguments[0];
+        const cb = arguments[arguments.length - 1];
+
+        function* walk(root) {
+            for (const el of root.querySelectorAll('*')) {
+                yield el;
+                if (el.shadowRoot) yield* walk(el.shadowRoot);
             }
-
-            Thread.Sleep(200);
+        }
+        function visible(el) {
+            if (!el) return false;
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
         }
 
-        return false;
-    }
+        const menuEl = document.querySelector(`shreddit-post-overflow-menu[post-id='${postId}']`);
+        if (!menuEl) { cb('no-menu'); }
+        else if (!menuEl.hasAttribute('is-post-saved')) { cb('already-unsaved'); }
+        else {
+            const trigger = menuEl.querySelector(""button[aria-label='Open user actions']"");
+            if (!trigger) { cb('no-trigger'); }
+            else {
+                if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
+                let tries = 0;
+                const timer = setInterval(() => {
+                    tries++;
+                    let target = null;
+                    for (const el of walk(document)) {
+                        if (el.id === 'post-overflow-save') {
+                            const mi = el.getAttribute('role') === 'menuitem' ? el : el.querySelector(""[role='menuitem']"");
+                            if (visible(mi)) { target = mi; break; }
+                        }
+                    }
+                    if (target) { clearInterval(timer); target.click(); cb('ok'); }
+                    else if (tries > 40) { clearInterval(timer); cb('item-not-found'); }
+                }, 150);
+            }
+        }";
+
+    private void Report(string message) =>
+        progress?.Report(new ScrapeProgress(message, downloadCount, postCount));
 
     private static bool IsDirectMedia(string url)
     {

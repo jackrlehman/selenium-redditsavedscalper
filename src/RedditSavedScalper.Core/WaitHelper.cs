@@ -1,6 +1,8 @@
 using OpenQA.Selenium;
 
-internal static class WaitHelper
+namespace RedditSavedScalper.Core;
+
+public static class WaitHelper
 {
     public static IWebElement WaitForClickable(IWebDriver driver, By selector, int waitSeconds)
     {

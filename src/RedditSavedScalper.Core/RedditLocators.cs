@@ -1,4 +1,6 @@
-internal static class RedditUrls
+namespace RedditSavedScalper.Core;
+
+public static class RedditUrls
 {
     public const string Home = "https://www.reddit.com/";
     public const string Login = "https://www.reddit.com/login/";
@@ -6,9 +8,9 @@ internal static class RedditUrls
     public static string SavedPage(string username) => $"https://www.reddit.com/user/{username}/saved/";
 }
 
-internal static class RedditLocators
+public static class RedditLocators
 {
-    internal static class Login
+    public static class Login
     {
         // Reddit's login is its own page now (no header popup, no <iframe>).
         // The username/password fields are <faceplate-text-input> web components
@@ -17,13 +19,9 @@ internal static class RedditLocators
         public const string PasswordHostId = "login-password";
         public const string ShadowInputCss = "input";
         public const string SubmitButtonCss = "button.login";
-
-        // Present (with is-logged-in="true") only when a session already exists -
-        // used to reuse a persistent-profile session and skip the login form.
-        public const string LoggedInHeaderCss = "reddit-header-large[is-logged-in='true']";
     }
 
-    internal static class Saved
+    public static class Saved
     {
         // The saved feed is a <shreddit-feed> of <shreddit-post> web components.
         // Each post exposes its media + metadata as attributes, so there is no need
